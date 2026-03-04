@@ -9,7 +9,7 @@ import json
 MODEL_ID        = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-35B-A3B-FP8")
 TENSOR_PARALLEL = os.environ.get("TENSOR_PARALLEL_SIZE", "8")   # GPUs per node
 MAX_MODEL_LEN   = int(os.environ.get("MAX_MODEL_LEN", "32768"))
-GPU_UTIL        = os.environ.get("GPU_MEMORY_UTILIZATION", "0.92")
+GPU_UTIL        = os.environ.get("GPU_MEMORY_UTILIZATION", "0.95")
 HOST            = "0.0.0.0"
 PORT            = 8000
 VLLM_URL        = f"http://localhost:{PORT}"
@@ -21,7 +21,7 @@ def start_vllm():
         "--model",                  "Qwen/Qwen3.5-35B-A3B-FP8",
         "--tensor-parallel-size",   TENSOR_PARALLEL,
         "--max-model-len",          "32768",   # reduce from 262144 to save VRAM
-        "--gpu-memory-utilization", "0.92",
+        "--gpu-memory-utilization", GPU_UTIL,
         "--reasoning-parser",       "qwen3",   # ← required for this model
         "--dtype",                  "auto",
         "--disable-log-requests",
