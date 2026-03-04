@@ -1,9 +1,7 @@
 FROM vllm/vllm-openai:latest
 
-# Install the RunPod serverless worker SDK
-RUN pip install vllm --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly
+RUN pip install runpod huggingface_hub
 
-# Copy the handler
 COPY handler.py /app/handler.py
 
 WORKDIR /app
