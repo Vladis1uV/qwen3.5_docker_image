@@ -13,10 +13,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . -t vladis1uv/vllm-qwen3.5:latest
-    - name: push image to docker hub
-      run: |
-        docker login -u vladis1uv -p ${{ secrets.DOCKER_HUB_TOKEN }}
-        docker push vladis1uv/vllm-qwen3.5:latest
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          sudo docker image prune -af
+          df -h
+      
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Build the Docker image
+        run: docker build . -t vladis1uv/vllm-qwen3.5:latest
+      
+      - name: push image to docker hub
+        run: |
+          docker login -u vladis1uv -p ${{ secrets.DOCKER_HUB_TOKEN }}
+          docker push vladis1uv/vllm-qwen3.5:latest
