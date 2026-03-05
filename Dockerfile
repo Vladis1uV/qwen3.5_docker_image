@@ -6,4 +6,5 @@ COPY handler.py /app/handler.py
 
 WORKDIR /app
 
+ENTRYPOINT []
 CMD ["python", "handler.py"]
