@@ -6,6 +6,18 @@ import os
 import json
 import sys
 
+try:
+    import runpod
+    import requests
+    import subprocess
+    import time
+    import os
+    import json
+    print("=== IMPORTS OK ===", flush=True)
+except Exception as e:
+    print(f"=== IMPORT FAILED: {e} ===", flush=True)
+    sys.exit(1)
+
 print("=== [1/6] IMPORTS OK ===", flush=True)
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -152,7 +164,13 @@ def handler(job):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("=== WORKER STARTING ===", flush=True)
-    start_vllm()
-    print("=== VLLM READY — STARTING RUNPOD HANDLER ===", flush=True)
-    runpod.serverless.start({"handler": handler})
+    try:
+        print("=== WORKER STARTING ===", flush=True)
+        start_vllm()
+        print("=== VLLM READY — STARTING RUNPOD HANDLER ===", flush=True)
+        runpod.serverless.start({"handler": handler})
+    except Exception as e:
+        print(f"=== FATAL ERROR: {e} ===", flush=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
