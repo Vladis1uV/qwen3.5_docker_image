@@ -81,9 +81,6 @@ def start_vllm():
         "--enable-chunked-prefill",  # Better memory management
     ]
 
-    if HF_HOME:
-        cmd += ["--download-dir", HF_HOME]
-
     print(f"  vLLM command: {' '.join(cmd)}", flush=True)
 
     env = os.environ.copy()
