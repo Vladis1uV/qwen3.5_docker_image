@@ -25,7 +25,7 @@ MODEL_ID        = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-35B-A3B-FP8")
 TENSOR_PARALLEL = os.environ.get("TENSOR_PARALLEL_SIZE", "1")
 MAX_MODEL_LEN   = int(os.environ.get("MAX_MODEL_LEN", "32768"))
 GPU_UTIL        = os.environ.get("GPU_MEMORY_UTILIZATION", "0.92")
-HF_HOME         = os.environ.get("HF_HOME", "/runpod-volume/hf_cache")
+HF_HOME         = os.environ.get("HF_HOME", "/runpod-volume/.cache/huggingface")
 PORT            = 8000
 VLLM_URL        = f"http://localhost:{PORT}"
 
@@ -65,16 +65,20 @@ def start_vllm():
     print("=== [5/6] STARTING VLLM SERVER ===", flush=True)
 
     cmd = [
-        "python3", "-m", "vllm.entrypoints.openai.api_server",
-        "--model",                  MODEL_ID,
-        "--host",                   "0.0.0.0",
-        "--port",                   str(PORT),
-        "--tensor-parallel-size",   TENSOR_PARALLEL,
-        "--max-model-len",          str(MAX_MODEL_LEN),
+        sys.executable,
+        "-m", "vllm.entrypoints.openai.api_server",
+        "--model", MODEL_ID,
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--tensor-parallel-size", TENSOR_PARALLEL,
+        "--max-model-len", str(MAX_MODEL_LEN),
         "--gpu-memory-utilization", GPU_UTIL,
-        "--reasoning-parser",       "qwen3",
-        "--dtype",                  "auto",
+        "--trust-remote-code",  # REQUIRED for Qwen3.5
+        "--max-num-seqs", "16",  # Prevent OOM with high concurrency
+        "--dtype", "auto",
         "--disable-log-requests",
+        "--download-dir", HF_HOME,
+        "--enable-chunked-prefill",  # Better memory management
     ]
 
     if HF_HOME:
