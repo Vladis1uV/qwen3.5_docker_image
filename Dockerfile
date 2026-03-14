@@ -1,11 +1,24 @@
-FROM python:3.11-slim
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
 
-# Install system dependencies
+# Prevent interactive prompts during build
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install Python and system dependencies
 RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
     curl \
     wget \
     git \
     && rm -rf /var/lib/apt/lists/*
+
+# Make python3.11 the default
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# Link CUDA compat libraries so vLLM can find libcudart.so.12
+RUN ldconfig /usr/local/cuda/compat/
 
 # Install uv
 RUN pip install uv
