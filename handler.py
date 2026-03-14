@@ -5,18 +5,7 @@ import time
 import os
 import json
 import sys
-
-try:
-    import runpod
-    import requests
-    import subprocess
-    import time
-    import os
-    import json
-    print("=== IMPORTS OK ===", flush=True)
-except Exception as e:
-    print(f"=== IMPORT FAILED: {e} ===", flush=True)
-    sys.exit(1)
+import threading
 
 print("=== [1/6] IMPORTS OK ===", flush=True)
 
@@ -39,8 +28,7 @@ print(f"  HF_HOME:               {HF_HOME}", flush=True)
 # ── Check volume / model files ────────────────────────────────────────────────
 print("=== [3/6] CHECKING VOLUME & MODEL FILES ===", flush=True)
 if os.path.exists("/runpod-volume"):
-    print(f"  /runpod-volume EXISTS", flush=True)
-    print(f"  contents: {os.listdir('/runpod-volume')}", flush=True)
+    print(f"  /runpod-volume EXISTS: {os.listdir('/runpod-volume')}", flush=True)
 else:
     print("  WARNING: /runpod-volume does NOT exist — no network volume mounted!", flush=True)
 
@@ -49,7 +37,7 @@ if HF_HOME and os.path.exists(HF_HOME):
 else:
     print(f"  WARNING: HF_HOME path not found: {HF_HOME}", flush=True)
 
-# Check GPU
+# ── Check GPU ────────────────────────────────────────────────────────────────
 print("=== [4/6] CHECKING GPU ===", flush=True)
 try:
     result = subprocess.run(
@@ -61,6 +49,11 @@ except Exception as e:
     print(f"  WARNING: nvidia-smi failed: {e}", flush=True)
 
 # ── Launch vLLM server ────────────────────────────────────────────────────────
+def stream_logs(process):
+    """Stream vLLM logs in a background thread."""
+    for line in iter(process.stdout.readline, ""):
+        print(f"  [vLLM] {line.strip()}", flush=True)
+
 def start_vllm():
     print("=== [5/6] STARTING VLLM SERVER ===", flush=True)
 
@@ -69,52 +62,44 @@ def start_vllm():
         "-m", "vllm.entrypoints.openai.api_server",
         "--model", MODEL_ID,
         "--host", "0.0.0.0",
-        "--port", "8000",
+        "--port", str(PORT),
         "--tensor-parallel-size", TENSOR_PARALLEL,
         "--max-model-len", str(MAX_MODEL_LEN),
         "--gpu-memory-utilization", GPU_UTIL,
-        "--trust-remote-code",  # REQUIRED for Qwen3.5
-        "--max-num-seqs", "16",  # Prevent OOM with high concurrency
+        "--trust-remote-code",
+        "--max-num-seqs", "16",
         "--dtype", "auto",
         "--disable-log-requests",
         "--download-dir", HF_HOME,
-        "--enable-chunked-prefill",  # Better memory management
+        "--enable-chunked-prefill",
+        "--reasoning-parser", "qwen3",  # Required per Qwen3.5 model card
     ]
 
     print(f"  vLLM command: {' '.join(cmd)}", flush=True)
 
-    env = os.environ.copy()
     process = subprocess.Popen(
         cmd,
-        env=env,
+        env=os.environ.copy(),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
+        text=True,
+        bufsize=1,
     )
 
-    print("  Waiting for vLLM to be ready...", flush=True)
+    # Stream logs in background so readline() doesn't block health checks
+    log_thread = threading.Thread(target=stream_logs, args=(process,), daemon=True)
+    log_thread.start()
 
+    print("  Waiting for vLLM to be ready (up to 600s)...", flush=True)
     for i in range(600):
-        # Print vLLM's own logs in real time
-        if process.stdout:
-            line = process.stdout.readline()
-            if line:
-                print(f"  [vLLM] {line.strip()}", flush=True)
-
-        # Check if process died
         if process.poll() is not None:
-            print(f"  ERROR: vLLM process exited with code {process.poll()}", flush=True)
-            # Drain remaining logs
-            if process.stdout:
-                for line in process.stdout:
-                    print(f"  [vLLM] {line.strip()}", flush=True)
+            print(f"  ERROR: vLLM exited with code {process.poll()}", flush=True)
             sys.exit(1)
 
-        # Check if healthy
         try:
             r = requests.get(f"{VLLM_URL}/health", timeout=2)
             if r.status_code == 200:
-                print(f"  vLLM is READY after {i} seconds!", flush=True)
+                print(f"  vLLM is READY after {i}s!", flush=True)
                 return
         except Exception:
             pass
@@ -127,9 +112,7 @@ def start_vllm():
 
 # ── RunPod handler ────────────────────────────────────────────────────────────
 def handler(job):
-    print(f"=== [6/6] REQUEST RECEIVED ===", flush=True)
-    print(f"  job id:    {job.get('id')}", flush=True)
-    print(f"  job input: {json.dumps(job.get('input', {}))[:300]}", flush=True)
+    print(f"=== REQUEST: job={job.get('id')} ===", flush=True)
 
     job_input = job["input"]
     messages  = job_input.get("messages", [])
@@ -145,21 +128,16 @@ def handler(job):
     }
 
     try:
-        print(f"  Sending request to vLLM...", flush=True)
         resp = requests.post(
             f"{VLLM_URL}/v1/chat/completions",
             json=body,
             timeout=300,
         )
-        print(f"  vLLM response status: {resp.status_code}", flush=True)
         resp.raise_for_status()
         return resp.json()
     except requests.HTTPError as e:
-        print(f"  ERROR: HTTP error: {e}", flush=True)
-        print(f"  ERROR: Response body: {resp.text[:500]}", flush=True)
         return {"error": str(e), "detail": resp.text}
     except Exception as e:
-        print(f"  ERROR: Unexpected error: {e}", flush=True)
         return {"error": str(e)}
 
 
